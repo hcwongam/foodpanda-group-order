@@ -81,15 +81,17 @@
 
   </main>
 
-  <!-- 發起揪團 Modal -->
+  <!-- 發起/編輯揪團 Modal -->
   <div id="createModal" class="modal modal-hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-4 border-b">
-        <h3 class="text-lg font-bold text-gray-900">🍱 發起 Foodpanda 拼單</h3>
+        <h3 class="text-lg font-bold text-gray-900" id="createModalTitle">🍱 發起 Foodpanda 拼單</h3>
         <button id="closeCreateBtn" type="button" class="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
       </div>
 
       <form id="createForm" class="space-y-4 mt-4">
+        <input type="hidden" id="editOrderId">
+        
         <div>
           <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Foodpanda 餐廳連結 *</label>
           <input type="url" id="fpUrl" required placeholder="https://www.foodpanda.hk/restaurant/..." class="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#d70f64] focus:outline-none">
@@ -132,23 +134,23 @@
           <input type="text" id="paymentInfo" required placeholder="PayMe 連結 / FPS 電話：91234567" class="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#d70f64] focus:outline-none">
         </div>
 
-        <div class="border-t pt-3">
+        <div class="border-t pt-3" id="hostItemSection">
           <label class="block text-xs font-bold text-gray-700 uppercase mb-1">自己點的品項與金額 *</label>
           <div class="grid grid-cols-3 gap-2">
-            <input type="text" id="hostItem" required placeholder="品項名稱" class="col-span-2 px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#d70f64] focus:outline-none">
-            <input type="number" id="hostPrice" required min="1" placeholder="金額 ($)" class="px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#d70f64] focus:outline-none">
+            <input type="text" id="hostItem" placeholder="品項名稱" class="col-span-2 px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#d70f64] focus:outline-none">
+            <input type="number" id="hostPrice" min="1" placeholder="金額 ($)" class="px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#d70f64] focus:outline-none">
           </div>
         </div>
 
         <div class="pt-2 flex justify-end gap-2">
           <button id="cancelCreateBtn" type="button" class="px-4 py-2 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100">取消</button>
-          <button type="submit" class="px-5 py-2 bg-fp-pink text-white rounded-xl text-sm font-medium shadow hover:opacity-90">建立拼單</button>
+          <button type="submit" id="submitCreateBtn" class="px-5 py-2 bg-fp-pink text-white rounded-xl text-sm font-medium shadow hover:opacity-90">建立拼單</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- 加單 Modal -->
+  <!-- 加單/編輯個人品項 Modal -->
   <div id="joinModal" class="modal modal-hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
       <div class="flex justify-between items-center pb-3 border-b">
@@ -158,6 +160,7 @@
 
       <form id="joinForm" class="space-y-4 mt-4">
         <input type="hidden" id="joinOrderId">
+        <input type="hidden" id="editItemIndex" value="-1">
         
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -187,7 +190,7 @@
 
         <div class="pt-2 flex justify-end gap-2">
           <button id="cancelJoinBtn" type="button" class="px-4 py-2 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100">取消</button>
-          <button type="submit" class="px-5 py-2 bg-fp-pink text-white rounded-xl text-sm font-medium shadow hover:opacity-90">確認加單</button>
+          <button type="submit" id="submitJoinBtn" class="px-5 py-2 bg-fp-pink text-white rounded-xl text-sm font-medium shadow hover:opacity-90">確認加單</button>
         </div>
       </form>
     </div>
@@ -210,11 +213,9 @@
   </footer>
 
   <script>
-    // 資料管理
     let orders = JSON.parse(localStorage.getItem('fp_orders')) || [];
     let currentTab = 'active';
 
-    // 頁面載入完成後初始化
     document.addEventListener('DOMContentLoaded', function() {
       setupEventListeners();
       checkNotificationPermission();
@@ -222,25 +223,20 @@
       setInterval(renderOrders, 30000);
     });
 
-    // 綁定事件監聽器
     function setupEventListeners() {
-      // 頂部按鈕
       document.getElementById('notiBtn').addEventListener('click', requestNotificationPermission);
-      document.getElementById('openCreateBtn').addEventListener('click', () => openModal('createModal'));
-      document.getElementById('emptyCreateBtn').addEventListener('click', () => openModal('createModal'));
+      document.getElementById('openCreateBtn').addEventListener('click', openCreateModal);
+      document.getElementById('emptyCreateBtn').addEventListener('click', openCreateModal);
 
-      // Modal 關閉按鈕
       document.getElementById('closeCreateBtn').addEventListener('click', () => closeModal('createModal'));
       document.getElementById('cancelCreateBtn').addEventListener('click', () => closeModal('createModal'));
       document.getElementById('closeJoinBtn').addEventListener('click', () => closeModal('joinModal'));
       document.getElementById('cancelJoinBtn').addEventListener('click', () => closeModal('joinModal'));
       document.getElementById('closeDetailBtn').addEventListener('click', () => closeModal('detailModal'));
 
-      // 表單提交
-      document.getElementById('createForm').addEventListener('submit', handleCreateOrder);
-      document.getElementById('joinForm').addEventListener('submit', handleJoinOrder);
+      document.getElementById('createForm').addEventListener('submit', handleCreateOrUpdateOrder);
+      document.getElementById('joinForm').addEventListener('submit', handleSaveItem);
 
-      // 頁籤切換
       document.getElementById('tab-active').addEventListener('click', () => switchTab('active'));
       document.getElementById('tab-history').addEventListener('click', () => switchTab('history'));
     }
@@ -251,6 +247,137 @@
 
     function closeModal(id) {
       document.getElementById(id).classList.add('modal-hidden');
+    }
+
+    function openCreateModal() {
+      document.getElementById('createModalTitle').innerText = "🍱 發起 Foodpanda 拼單";
+      document.getElementById('submitCreateBtn').innerText = "建立拼單";
+      document.getElementById('editOrderId').value = "";
+      document.getElementById('hostItemSection').classList.remove('hidden');
+      document.getElementById('hostItem').required = true;
+      document.getElementById('hostPrice').required = true;
+      document.getElementById('createForm').reset();
+      openModal('createModal');
+    }
+
+    function openEditModal(orderId) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      document.getElementById('createModalTitle').innerText = `✏️ 編輯 ${order.restaurantName} 拼單資訊`;
+      document.getElementById('submitCreateBtn').innerText = "儲存修改";
+      document.getElementById('editOrderId').value = order.id;
+
+      document.getElementById('fpUrl').value = order.fpUrl;
+      document.getElementById('hostName').value = order.hostName;
+      document.getElementById('hostDept').value = order.hostDept;
+      document.getElementById('hostPhone').value = order.hostPhone;
+      document.getElementById('deadline').value = order.deadline;
+      document.getElementById('targetAmount').value = order.targetAmount;
+      document.getElementById('address').value = order.address;
+      document.getElementById('paymentInfo').value = order.paymentInfo;
+
+      document.getElementById('hostItemSection').classList.add('hidden');
+      document.getElementById('hostItem').required = false;
+      document.getElementById('hostPrice').required = false;
+
+      openModal('createModal');
+    }
+
+    function deleteOrder(orderId) {
+      if (confirm('確定要刪除整個拼單嗎？所有參與者的點餐紀錄都會被清除！')) {
+        orders = orders.filter(o => o.id !== orderId);
+        saveOrders();
+        closeModal('detailModal');
+        renderOrders();
+      }
+    }
+
+    // 開啟加單 Modal
+    function openJoinModal(orderId) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      document.getElementById('joinOrderId').value = orderId;
+      document.getElementById('editItemIndex').value = "-1"; // -1 代表新增
+      document.getElementById('joinModalTitle').innerText = `加入 ${order.restaurantName} 拼單`;
+      document.getElementById('submitJoinBtn').innerText = "確認加單";
+      document.getElementById('joinForm').reset();
+      openModal('joinModal');
+    }
+
+    // 開啟編輯個人品項 Modal
+    function openEditItemModal(orderId, itemIndex) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order || !order.items[itemIndex]) return;
+
+      const item = order.items[itemIndex];
+      document.getElementById('joinOrderId').value = orderId;
+      document.getElementById('editItemIndex').value = itemIndex; // 紀錄要編輯第幾個品項
+      document.getElementById('joinModalTitle').innerText = `✏️ 編輯品項 (${order.restaurantName})`;
+      document.getElementById('submitJoinBtn').innerText = "儲存修改";
+
+      document.getElementById('joinName').value = item.userName;
+      document.getElementById('joinDept').value = item.userDept;
+      document.getElementById('joinPhone').value = item.userPhone || "";
+      document.getElementById('joinItem').value = item.itemName;
+      document.getElementById('joinPrice').value = item.price;
+
+      openModal('joinModal');
+    }
+
+    // 處理新增或修改品項
+    function handleSaveItem(e) {
+      e.preventDefault();
+      const orderId = document.getElementById('joinOrderId').value;
+      const itemIndex = parseInt(document.getElementById('editItemIndex').value);
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      const userName = document.getElementById('joinName').value;
+      const userDept = document.getElementById('joinDept').value;
+      const userPhone = document.getElementById('joinPhone').value;
+      const itemName = document.getElementById('joinItem').value;
+      const price = parseFloat(document.getElementById('joinPrice').value);
+
+      if (itemIndex >= 0) {
+        // 編輯模式
+        const isHost = order.items[itemIndex].isHost;
+        order.items[itemIndex] = { userName, userDept, userPhone, itemName, price, isHost };
+      } else {
+        // 新增模式
+        order.items.push({ userName, userDept, userPhone, itemName, price, isHost: false });
+      }
+
+      saveOrders();
+      closeModal('joinModal');
+      document.getElementById('joinForm').reset();
+      
+      // 如果詳情 Modal 是打開狀態，同步更新
+      openDetailModal(orderId);
+      renderOrders();
+
+      const total = order.items.reduce((sum, item) => sum + item.price, 0);
+      const remain = Math.max(0, order.targetAmount - total);
+
+      if (itemIndex === -1) {
+        sendWindowsNotification(
+          `加單更新：${order.restaurantName}`,
+          `${userName} 加入了點餐！當前總額 $${total} ${remain === 0 ? '(已達免運！)' : `(差 $${remain})`}`
+        );
+      }
+    }
+
+    function deleteItem(orderId, itemIndex) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      if (confirm(`確定要刪除「${order.items[itemIndex].userName}」點的 ${order.items[itemIndex].itemName} 嗎？`)) {
+        order.items.splice(itemIndex, 1);
+        saveOrders();
+        openDetailModal(orderId);
+        renderOrders();
+      }
     }
 
     function switchTab(tab) {
@@ -326,9 +453,10 @@
       return "FOODPANDA 餐廳拼單";
     }
 
-    function handleCreateOrder(e) {
+    function handleCreateOrUpdateOrder(e) {
       e.preventDefault();
       
+      const editOrderId = document.getElementById('editOrderId').value;
       const fpUrl = document.getElementById('fpUrl').value;
       const hostName = document.getElementById('hostName').value;
       const hostDept = document.getElementById('hostDept').value;
@@ -337,72 +465,53 @@
       const targetAmount = parseFloat(document.getElementById('targetAmount').value);
       const address = document.getElementById('address').value;
       const paymentInfo = document.getElementById('paymentInfo').value;
-      const hostItem = document.getElementById('hostItem').value;
-      const hostPrice = parseFloat(document.getElementById('hostPrice').value);
 
       const restaurantName = parseRestaurantName(fpUrl);
 
-      const newOrder = {
-        id: Date.now().toString(),
-        restaurantName,
-        fpUrl,
-        hostName,
-        hostDept,
-        hostPhone,
-        deadline,
-        targetAmount,
-        address,
-        paymentInfo,
-        items: [{ userName: hostName, userDept: hostDept, userPhone: hostPhone, itemName: hostItem, price: hostPrice, isHost: true }],
-        createdAt: new Date().toISOString()
-      };
+      if (editOrderId) {
+        const order = orders.find(o => o.id === editOrderId);
+        if (order) {
+          order.restaurantName = restaurantName;
+          order.fpUrl = fpUrl;
+          order.hostName = hostName;
+          order.hostDept = hostDept;
+          order.hostPhone = hostPhone;
+          order.deadline = deadline;
+          order.targetAmount = targetAmount;
+          order.address = address;
+          order.paymentInfo = paymentInfo;
+        }
+      } else {
+        const hostItem = document.getElementById('hostItem').value;
+        const hostPrice = parseFloat(document.getElementById('hostPrice').value);
 
-      orders.unshift(newOrder);
+        const newOrder = {
+          id: Date.now().toString(),
+          restaurantName,
+          fpUrl,
+          hostName,
+          hostDept,
+          hostPhone,
+          deadline,
+          targetAmount,
+          address,
+          paymentInfo,
+          items: [{ userName: hostName, userDept: hostDept, userPhone: hostPhone, itemName: hostItem, price: hostPrice, isHost: true }],
+          createdAt: new Date().toISOString()
+        };
+
+        orders.unshift(newOrder);
+
+        sendWindowsNotification(
+          `🍱 新拼單通知：${restaurantName}`,
+          `發起人：${hostName} (${hostDept})\n截單時間：${deadline} | 免運目標：$${targetAmount}`
+        );
+      }
+
       saveOrders();
       closeModal('createModal');
       document.getElementById('createForm').reset();
       renderOrders();
-
-      sendWindowsNotification(
-        `🍱 新拼單通知：${restaurantName}`,
-        `發起人：${hostName} (${hostDept})\n截單時間：${deadline} | 免運目標：$${targetAmount}`
-      );
-    }
-
-    function openJoinModal(orderId) {
-      const order = orders.find(o => o.id === orderId);
-      if (!order) return;
-      document.getElementById('joinOrderId').value = orderId;
-      document.getElementById('joinModalTitle').innerText = `加入 ${order.restaurantName} 拼單`;
-      openModal('joinModal');
-    }
-
-    function handleJoinOrder(e) {
-      e.preventDefault();
-      const orderId = document.getElementById('joinOrderId').value;
-      const order = orders.find(o => o.id === orderId);
-      if (!order) return;
-
-      const userName = document.getElementById('joinName').value;
-      const userDept = document.getElementById('joinDept').value;
-      const userPhone = document.getElementById('joinPhone').value;
-      const itemName = document.getElementById('joinItem').value;
-      const price = parseFloat(document.getElementById('joinPrice').value);
-
-      order.items.push({ userName, userDept, userPhone, itemName, price, isHost: false });
-
-      saveOrders();
-      closeModal('joinModal');
-      document.getElementById('joinForm').reset();
-      renderOrders();
-
-      const total = order.items.reduce((sum, item) => sum + item.price, 0);
-      const remain = Math.max(0, order.targetAmount - total);
-
-      sendWindowsNotification(
-        `加單更新：${order.restaurantName}`,
-        `${userName} 加入了點餐！當前總額 $${total} ${remain === 0 ? '(已達免運！)' : `(差 $${remain})`}`
-      );
     }
 
     function openDetailModal(orderId) {
@@ -415,16 +524,28 @@
       const remain = Math.max(0, order.targetAmount - currentTotal);
       const progress = Math.min(100, Math.round((currentTotal / order.targetAmount) * 100));
 
-      let itemsHtml = order.items.map(item => `
-        <div class="flex justify-between items-center py-2 border-b text-sm">
-          <div>
-            <span class="font-bold text-gray-800">${item.userName}</span> 
-            <span class="text-xs text-gray-500">(${item.userDept}${item.isHost ? ' · 發起人' : ''}) - 📞 ${item.userPhone || '無'}</span>
-            <p class="text-gray-600 text-xs mt-0.5">${item.itemName}</p>
+      let itemsHtml = order.items.length === 0 
+        ? `<p class="text-xs text-gray-400 py-2 text-center">目前尚無任何點餐品項</p>`
+        : order.items.map((item, index) => `
+          <div class="flex justify-between items-center py-2.5 border-b text-sm hover:bg-slate-50/80 px-1 rounded transition">
+            <div class="flex-1 pr-2">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-gray-800">${item.userName}</span> 
+                <span class="text-[11px] bg-slate-100 text-gray-600 px-1.5 py-0.5 rounded">${item.userDept}</span>
+                ${item.isHost ? '<span class="text-[10px] bg-pink-100 text-fp-pink font-bold px-1.5 py-0.5 rounded">發起人</span>' : ''}
+              </div>
+              <p class="text-gray-700 text-xs mt-1 font-medium">${item.itemName}</p>
+              <p class="text-[10px] text-gray-400 mt-0.5">📞 ${item.userPhone || '無電話'}</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="font-bold text-gray-800">$${item.price}</span>
+              <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg">
+                <button onclick="openEditItemModal('${order.id}', ${index})" class="text-xs text-gray-600 hover:text-blue-600 px-1" title="編輯此品項">✏️</button>
+                <button onclick="deleteItem('${order.id}', ${index})" class="text-xs text-gray-600 hover:text-red-500 px-1" title="刪除此品項">🗑️</button>
+              </div>
+            </div>
           </div>
-          <div class="font-bold text-gray-800">$${item.price}</div>
-        </div>
-      `).join('');
+        `).join('');
 
       document.getElementById('detailContent').innerHTML = `
         <div class="bg-slate-50 p-3 rounded-xl border text-xs space-y-1 text-gray-600">
@@ -449,8 +570,16 @@
         </div>
 
         <div>
-          <h4 class="font-bold text-sm text-gray-800 mb-2">已點品項清單 (${order.items.length} 人)</h4>
-          <div class="max-h-48 overflow-y-auto pr-1">${itemsHtml}</div>
+          <div class="flex justify-between items-center mb-2">
+            <h4 class="font-bold text-sm text-gray-800">已點品項清單 (${order.items.length} 人)</h4>
+            <span class="text-[10px] text-gray-400">點擊 ✏️ 可修改個人品項</span>
+          </div>
+          <div class="max-h-56 overflow-y-auto pr-1">${itemsHtml}</div>
+        </div>
+
+        <div class="pt-3 border-t flex justify-between items-center">
+          <button onclick="deleteOrder('${order.id}')" class="text-xs text-red-500 hover:text-red-700 font-medium">🗑️ 刪除整個拼單</button>
+          <button onclick="openEditModal('${order.id}')" class="text-xs bg-slate-100 hover:bg-slate-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium">✏️ 編輯拼單資訊</button>
         </div>
       `;
 
@@ -486,15 +615,19 @@
         const isExpired = order.deadline < currentHM;
 
         return `
-          <div class="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition flex flex-col overflow-hidden">
+          <div class="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition flex flex-col overflow-hidden relative">
             <div class="p-5 flex-1">
               <div class="flex justify-between items-start mb-2">
                 <span class="text-xs font-bold px-2.5 py-1 rounded-full ${isExpired ? 'bg-gray-100 text-gray-500' : 'bg-pink-50 text-fp-pink'}">
                   ${isExpired ? '已截單' : `截止時間 ${order.deadline}`}
                 </span>
-                <a href="${order.fpUrl}" target="_blank" class="text-xs text-gray-400 hover:text-fp-pink flex items-center gap-1">
-                  菜單 ↗
-                </a>
+                <div class="flex items-center gap-2">
+                  <button onclick="openEditModal('${order.id}')" class="text-xs text-gray-400 hover:text-gray-700" title="編輯拼單">✏️</button>
+                  <button onclick="deleteOrder('${order.id}')" class="text-xs text-gray-400 hover:text-red-500" title="刪除拼單">🗑️</button>
+                  <a href="${order.fpUrl}" target="_blank" class="text-xs text-gray-400 hover:text-fp-pink flex items-center gap-1">
+                    菜單 ↗
+                  </a>
+                </div>
               </div>
 
               <h3 class="text-lg font-bold text-gray-900 mb-1 tracking-tight">${order.restaurantName}</h3>
@@ -527,7 +660,7 @@
 
             <div class="bg-slate-50 border-t px-5 py-3 flex gap-2">
               <button onclick="openDetailModal('${order.id}')" class="flex-1 py-2 bg-white border border-slate-200 text-gray-700 text-xs font-medium rounded-xl hover:bg-slate-100 transition">
-                查看明細 (${order.items.length})
+                查看明細 / 修改品項 (${order.items.length})
               </button>
               ${!isExpired ? `
                 <button onclick="openJoinModal('${order.id}')" class="flex-1 py-2 bg-fp-pink text-white text-xs font-medium rounded-xl shadow-sm hover:opacity-90 transition">
